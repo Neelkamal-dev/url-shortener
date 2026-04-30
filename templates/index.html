@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Snip — URL Shortener</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0a0f;
+      --surface: #13131a;
+      --border: #22222e;
+      --accent: #c8f135;
+      --accent-dim: #a0c420;
+      --text: #f0f0f5;
+      --muted: #6b6b80;
+      --red: #ff5566;
+      --radius: 12px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Syne', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 60px 20px 40px;
+    }
+
+    /* Background grid */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(var(--border) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border) 1px, transparent 1px);
+      background-size: 40px 40px;
+      opacity: 0.4;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .container {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: 680px;
+    }
+
+    header {
+      margin-bottom: 48px;
+      text-align: center;
+    }
+
+    .logo {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .logo-icon {
+      width: 36px;
+      height: 36px;
+      background: var(--accent);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .logo-icon svg { width: 20px; height: 20px; }
+
+    h1 {
+      font-size: 2.6rem;
+      font-weight: 800;
+      letter-spacing: -1px;
+      color: var(--text);
+    }
+
+    h1 span { color: var(--accent); }
+
+    .tagline {
+      color: var(--muted);
+      font-size: 0.95rem;
+      font-family: 'DM Mono', monospace;
+      margin-top: 6px;
+    }
+
+    /* Card */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px;
+      margin-bottom: 24px;
+    }
+
+    .card-title {
+      font-size: 0.75rem;
+      font-family: 'DM Mono', monospace;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      margin-bottom: 16px;
+    }
+
+    /* Input group */
+    .input-row {
+      display: flex;
+      gap: 10px;
+    }
+
+    input[type="text"] {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-family: 'DM Mono', monospace;
+      font-size: 0.9rem;
+      padding: 12px 16px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    input[type="text"]:focus { border-color: var(--accent); }
+    input[type="text"]::placeholder { color: var(--muted); }
+
+    .btn {
+      background: var(--accent);
+      color: #0a0a0f;
+      border: none;
+      border-radius: 8px;
+      font-family: 'Syne', sans-serif;
+      font-size: 0.9rem;
+      font-weight: 700;
+      padding: 12px 22px;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+      white-space: nowrap;
+    }
+
+    .btn:hover { background: var(--accent-dim); }
+    .btn:active { transform: scale(0.97); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .custom-row {
+      margin-top: 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .custom-prefix {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.82rem;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    /* Result box */
+    #result-box {
+      display: none;
+      margin-top: 20px;
+      background: #0d1a00;
+      border: 1px solid var(--accent);
+      border-radius: 8px;
+      padding: 16px 20px;
+    }
+
+    .result-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.72rem;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      margin-bottom: 8px;
+    }
+
+    .result-link-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    #result-link {
+      font-family: 'DM Mono', monospace;
+      font-size: 1.05rem;
+      color: var(--accent);
+      font-weight: 500;
+      word-break: break-all;
+      flex: 1;
+      text-decoration: none;
+    }
+
+    #result-link:hover { text-decoration: underline; }
+
+    .copy-btn {
+      background: transparent;
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      border-radius: 6px;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.78rem;
+      padding: 6px 12px;
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+      white-space: nowrap;
+    }
+
+    .copy-btn:hover { background: var(--accent); color: var(--bg); }
+
+    /* Error */
+    #error-box {
+      display: none;
+      margin-top: 12px;
+      background: #1a0005;
+      border: 1px solid var(--red);
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.85rem;
+      color: var(--red);
+    }
+
+    /* URL Table */
+    .table-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .refresh-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: border-color 0.2s, color 0.2s;
+    }
+
+    .refresh-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    #urls-list { display: flex; flex-direction: column; gap: 10px; }
+
+    .url-item {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .url-info { flex: 1; min-width: 0; }
+
+    .url-short {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.9rem;
+      color: var(--accent);
+      font-weight: 500;
+      text-decoration: none;
+    }
+
+    .url-short:hover { text-decoration: underline; }
+
+    .url-original {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 4px;
+    }
+
+    .url-meta {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+
+    .clicks-badge {
+      background: #1a1a24;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.72rem;
+      color: var(--muted);
+      padding: 3px 8px;
+    }
+
+    .clicks-badge span { color: var(--text); font-weight: 500; }
+
+    .delete-btn {
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      padding: 4px;
+      border-radius: 4px;
+      transition: color 0.2s;
+      font-size: 1rem;
+    }
+
+    .delete-btn:hover { color: var(--red); }
+
+    .empty-state {
+      text-align: center;
+      padding: 32px;
+      color: var(--muted);
+      font-family: 'DM Mono', monospace;
+      font-size: 0.85rem;
+    }
+
+    footer {
+      margin-top: 32px;
+      text-align: center;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="logo">
+        <div class="logo-icon">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" stroke="#0a0a0f" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" stroke="#0a0a0f" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <h1>sn<span>ip</span></h1>
+      </div>
+      <p class="tagline">// short links. zero noise.</p>
+    </header>
+
+    <!-- Shorten Form -->
+    <div class="card">
+      <div class="card-title">// shorten a url</div>
+      <div class="input-row">
+        <input type="text" id="url-input" placeholder="https://your-very-long-url.com/goes/here" />
+        <button class="btn" id="shorten-btn" onclick="shortenUrl()">Snip →</button>
+      </div>
+      <div class="custom-row">
+        <span class="custom-prefix">{{ base_url }}/</span>
+        <input type="text" id="custom-code" placeholder="custom-code (optional)" style="flex:1" />
+      </div>
+      <div id="result-box">
+        <div class="result-label">✓ ready to share</div>
+        <div class="result-link-row">
+          <a id="result-link" href="#" target="_blank"></a>
+          <button class="copy-btn" onclick="copyLink()">Copy</button>
+        </div>
+      </div>
+      <div id="error-box"></div>
+    </div>
+
+    <!-- URLs List -->
+    <div class="card">
+      <div class="table-header">
+        <div class="card-title" style="margin-bottom:0">// recent links</div>
+        <button class="refresh-btn" onclick="loadUrls()">↻ refresh</button>
+      </div>
+      <div id="urls-list">
+        <div class="empty-state">Loading links…</div>
+      </div>
+    </div>
+
+    <footer>built with flask + sqlite · snip url shortener</footer>
+  </div>
+
+  <script>
+    const BASE_URL = "{{ base_url }}";
+
+    async function shortenUrl() {
+      const urlInput = document.getElementById('url-input');
+      const customCode = document.getElementById('custom-code');
+      const btn = document.getElementById('shorten-btn');
+      const resultBox = document.getElementById('result-box');
+      const errorBox = document.getElementById('error-box');
+      const resultLink = document.getElementById('result-link');
+
+      resultBox.style.display = 'none';
+      errorBox.style.display = 'none';
+
+      const url = urlInput.value.trim();
+      if (!url) {
+        showError('Please enter a URL.');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Snipping…';
+
+      try {
+        const res = await fetch('/api/shorten', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url, custom_code: customCode.value.trim() })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          showError(data.error || 'Something went wrong.');
+        } else {
+          resultLink.textContent = data.short_url;
+          resultLink.href = data.short_url;
+          resultBox.style.display = 'block';
+          loadUrls();
+        }
+      } catch (e) {
+        showError('Network error. Is the server running?');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Snip →';
+      }
+    }
+
+    function showError(msg) {
+      const errorBox = document.getElementById('error-box');
+      errorBox.textContent = '✗ ' + msg;
+      errorBox.style.display = 'block';
+    }
+
+    async function copyLink() {
+      const link = document.getElementById('result-link').textContent;
+      await navigator.clipboard.writeText(link);
+      const btn = document.querySelector('.copy-btn');
+      btn.textContent = 'Copied!';
+      setTimeout(() => btn.textContent = 'Copy', 1500);
+    }
+
+    async function loadUrls() {
+      const list = document.getElementById('urls-list');
+      try {
+        const res = await fetch('/api/urls');
+        const data = await res.json();
+
+        if (!data.urls || data.urls.length === 0) {
+          list.innerHTML = '<div class="empty-state">No links yet. Snip one above! ✂️</div>';
+          return;
+        }
+
+        list.innerHTML = data.urls.map(u => `
+          <div class="url-item" id="item-${u.short_code}">
+            <div class="url-info">
+              <a class="url-short" href="${u.short_url}" target="_blank">${u.short_url}</a>
+              <div class="url-original" title="${u.original_url}">${u.original_url}</div>
+            </div>
+            <div class="url-meta">
+              <div class="clicks-badge"><span>${u.clicks}</span> clicks</div>
+              <button class="delete-btn" onclick="deleteUrl('${u.short_code}')" title="Delete">✕</button>
+            </div>
+          </div>
+        `).join('');
+      } catch (e) {
+        list.innerHTML = '<div class="empty-state">Failed to load links.</div>';
+      }
+    }
+
+    async function deleteUrl(code) {
+      if (!confirm(`Delete /${code}?`)) return;
+      await fetch(`/api/urls/${code}`, { method: 'DELETE' });
+      document.getElementById(`item-${code}`)?.remove();
+      if (!document.querySelector('.url-item')) {
+        document.getElementById('urls-list').innerHTML =
+          '<div class="empty-state">No links yet. Snip one above! ✂️</div>';
+      }
+    }
+
+    // Allow Enter key to submit
+    document.addEventListener('DOMContentLoaded', () => {
+      loadUrls();
+      document.getElementById('url-input').addEventListener('keydown', e => {
+        if (e.key === 'Enter') shortenUrl();
+      });
+    });
+  </script>
+</body>
+</html>
