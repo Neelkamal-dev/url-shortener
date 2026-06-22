@@ -29,7 +29,7 @@ def is_valid_custom_code(code: str) -> bool:
     return bool(re.match(r'^[a-zA-Z0-9-]{3,20}$', code))
 
 
-def create_short_url(db, original_url: str, custom_code: str = None) -> dict:
+def create_short_url(db, original_url: str, custom_code: str = None, expires_at: datetime = None) -> dict:
     if not is_valid_url(original_url):
         return {'error': 'Invalid URL. Please include http:// or https://'}
 
@@ -47,20 +47,22 @@ def create_short_url(db, original_url: str, custom_code: str = None) -> dict:
 
         short_code = custom_code
     else:
-        # Return existing short code if URL already shortened
-        existing = db.execute(
-            text('SELECT short_code, clicks, created_at FROM urls WHERE original_url = :url'),
-            {'url': original_url}
-        ).fetchone()
+        # Return existing short code if URL already shortened and is not expiring
+        if not expires_at:
+            existing = db.execute(
+                text('SELECT short_code, clicks, created_at FROM urls WHERE original_url = :url AND expires_at IS NULL'),
+                {'url': original_url}
+            ).fetchone()
 
-        if existing:
-            return {
-                'short_code': existing.short_code,
-                'original_url': original_url,
-                'clicks': existing.clicks,
-                'created_at': str(existing.created_at),
-                'message': 'URL already shortened'
-            }
+            if existing:
+                return {
+                    'short_code': existing.short_code,
+                    'original_url': original_url,
+                    'clicks': existing.clicks,
+                    'created_at': str(existing.created_at),
+                    'expires_at': None,
+                    'message': 'URL already shortened'
+                }
 
         # Generate unique code
         for _ in range(10):
@@ -75,8 +77,8 @@ def create_short_url(db, original_url: str, custom_code: str = None) -> dict:
             return {'error': 'Could not generate a unique code. Please try again.'}
 
     db.execute(
-        text('INSERT INTO urls (original_url, short_code) VALUES (:url, :code)'),
-        {'url': original_url, 'code': short_code}
+        text('INSERT INTO urls (original_url, short_code, expires_at) VALUES (:url, :code, :expires_at)'),
+        {'url': original_url, 'code': short_code, 'expires_at': expires_at}
     )
     db.commit()
 
@@ -84,37 +86,59 @@ def create_short_url(db, original_url: str, custom_code: str = None) -> dict:
         'short_code': short_code,
         'original_url': original_url,
         'clicks': 0,
-        'created_at': datetime.utcnow().isoformat()
+        'created_at': datetime.utcnow().isoformat(),
+        'expires_at': expires_at.isoformat() if expires_at else None
     }
 
 
-def get_original_url(db, short_code: str):
+def get_original_url_check_expiry(db, short_code: str):
     row = db.execute(
-        text('SELECT original_url FROM urls WHERE short_code = :code'),
+        text('SELECT original_url, expires_at FROM urls WHERE short_code = :code'),
         {'code': short_code}
     ).fetchone()
 
     if not row:
-        return None
+        return None, False
+
+    # Check expiration
+    expires_at = row.expires_at
+    if expires_at:
+        if isinstance(expires_at, str):
+            clean_str = expires_at.replace('T', ' ').rstrip('Z')
+            for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M:%S.%f', '%Y-%m-%d'):
+                try:
+                    expires_at = datetime.strptime(clean_str, fmt)
+                    break
+                except ValueError:
+                    continue
+        if isinstance(expires_at, datetime) and expires_at < datetime.utcnow():
+            return None, True
 
     db.execute(
         text('UPDATE urls SET clicks = clicks + 1, last_accessed = CURRENT_TIMESTAMP WHERE short_code = :code'),
         {'code': short_code}
     )
     db.commit()
-    return row.original_url
+    return row.original_url, False
+
+
+def get_original_url(db, short_code: str):
+    # Fallback to keep compatibility
+    url, expired = get_original_url_check_expiry(db, short_code)
+    return url
 
 
 def get_all_urls(db) -> list:
     rows = db.execute(
-        text('SELECT original_url, short_code, clicks, created_at, last_accessed FROM urls ORDER BY created_at DESC')
+        text('SELECT original_url, short_code, clicks, created_at, last_accessed, expires_at FROM urls ORDER BY created_at DESC')
     ).fetchall()
     return [dict(r._mapping) for r in rows]
 
 
 def get_url_stats(db, short_code: str):
     row = db.execute(
-        text('SELECT original_url, short_code, clicks, created_at, last_accessed FROM urls WHERE short_code = :code'),
+        text('SELECT original_url, short_code, clicks, created_at, last_accessed, expires_at FROM urls WHERE short_code = :code'),
         {'code': short_code}
     ).fetchone()
     return dict(row._mapping) if row else None
+

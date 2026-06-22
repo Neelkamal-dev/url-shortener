@@ -20,7 +20,8 @@ STATEMENTS = [
         short_code    VARCHAR(20) NOT NULL UNIQUE,
         clicks        INTEGER DEFAULT 0,
         created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        last_accessed TIMESTAMP
+        last_accessed TIMESTAMP,
+        expires_at    TIMESTAMP
     )""",
     "CREATE INDEX IF NOT EXISTS idx_short_code ON urls(short_code)"
 ]
@@ -30,6 +31,13 @@ def init_db():
     with engine.connect() as conn:
         for stmt in STATEMENTS:
             conn.execute(text(stmt))
+        
+        # Schema migration: Add expires_at column if it does not exist
+        try:
+            conn.execute(text("ALTER TABLE urls ADD COLUMN expires_at TIMESTAMP"))
+        except Exception:
+            pass  # Column already exists
+            
         conn.commit()
     db_type = DATABASE_URL.split('://')[0]
     print(f"✅ Database initialized ({db_type})")

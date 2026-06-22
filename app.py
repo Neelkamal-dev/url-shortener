@@ -1,7 +1,8 @@
 from flask import Flask, request, jsonify, redirect, render_template, abort
 from database import init_db, get_db, close_db
-from url_service import create_short_url, get_original_url, get_all_urls, get_url_stats
+from url_service import create_short_url, get_original_url, get_all_urls, get_url_stats, get_original_url_check_expiry
 import os
+from datetime import datetime, timedelta
 
 app = Flask(__name__)
 app.teardown_appcontext(close_db)
@@ -27,6 +28,7 @@ def shorten_url():
 
     original_url = data['url'].strip()
     custom_code = data.get('custom_code', '').strip() or None
+    expires_in = data.get('expires_in')
 
     if not original_url:
         return jsonify({'error': 'URL cannot be empty'}), 400
@@ -34,8 +36,15 @@ def shorten_url():
     if not original_url.startswith(('http://', 'https://')):
         original_url = 'https://' + original_url
 
+    expires_at = None
+    if expires_in:
+        try:
+            expires_at = datetime.utcnow() + timedelta(seconds=int(expires_in))
+        except (ValueError, TypeError):
+            return jsonify({'error': 'Invalid value for expires_in. Must be an integer representing seconds.'}), 400
+
     db = get_db()
-    result = create_short_url(db, original_url, custom_code)
+    result = create_short_url(db, original_url, custom_code, expires_at)
 
     if 'error' in result:
         return jsonify(result), 400
@@ -51,7 +60,7 @@ def list_urls():
     for url in urls:
         url['short_url'] = f"{get_base_url()}/{url['short_code']}"
         # Convert datetime to string for JSON
-        for key in ('created_at', 'last_accessed'):
+        for key in ('created_at', 'last_accessed', 'expires_at'):
             if url.get(key):
                 url[key] = str(url[key])
     return jsonify({'urls': urls, 'total': len(urls)})
@@ -64,7 +73,7 @@ def url_stats(short_code):
     if not stats:
         return jsonify({'error': 'Short URL not found'}), 404
     stats['short_url'] = f"{get_base_url()}/{short_code}"
-    for key in ('created_at', 'last_accessed'):
+    for key in ('created_at', 'last_accessed', 'expires_at'):
         if stats.get(key):
             stats[key] = str(stats[key])
     return jsonify(stats)
@@ -84,7 +93,9 @@ def delete_url(short_code):
 @app.route('/<short_code>')
 def redirect_url(short_code):
     db = get_db()
-    original_url = get_original_url(db, short_code)
+    original_url, is_expired = get_original_url_check_expiry(db, short_code)
+    if is_expired:
+        return render_template('expired.html', code=short_code), 410
     if not original_url:
         abort(404)
     return redirect(original_url, code=302)
