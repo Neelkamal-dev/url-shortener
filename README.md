@@ -5,10 +5,13 @@ A production-ready URL shortener built with **Python + Flask + PostgreSQL**, dep
 ## Features
 - Shorten any URL to a 6-character code
 - Optional custom short codes (e.g. `/my-link`)
+- **Link Expiration (TTL)**: Set optional expiration times (e.g., 1 hour, 1 day, 1 week, 30 days) with a custom `410 Gone` expired page
+- **QR Code Generation**: Instantly scan or download a PNG QR code for shortened links
+- **Live Search & Filtering**: Instant client-side search in your link history
 - Click tracking per URL
 - Delete links
 - REST API
-- PostgreSQL database (production-grade)
+- PostgreSQL database (production-grade, falls back to SQLite for local development)
 
 ---
 
@@ -77,5 +80,5 @@ python app.py
 ```bash
 curl -X POST https://your-app.onrender.com/api/shorten \
   -H "Content-Type: application/json" \
-  -d '{"url": "https://github.com", "custom_code": "gh"}'
+  -d '{"url": "https://github.com", "custom_code": "gh", "expires_in": 3600}'
 ```
